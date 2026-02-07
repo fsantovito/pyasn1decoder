@@ -1,0 +1,19 @@
+[project]
+name = "asn1decoder"
+version = "0.1.0"
+description = "A decoder for ASN.1 (BER) binary data"
+authors = [
+    {name = "Filippo Santovito"}
+]
+license = {text = "GPLv3"}
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+]
+
+[tool.poetry]
+packages = [{include = "asn1decoder", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
