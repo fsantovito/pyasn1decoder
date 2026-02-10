@@ -235,51 +235,66 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
 
     Returns:
         (ASN1Encoding, int): the decoded encoding and the number of bytes consumed
-
-    Raises:
-        TokenizerError: if parsing fails
     """
 
-    identifier_octet, io_used_bytes = parse_identifier_octet(data=data, offset=offset)
+    # --- Identifier ---
+    identifier_octet, io_used_bytes = parse_identifier_octet(data, offset)
+
+    # --- Length ---
     length_form, content_length, lo_used_bytes = parse_length_octect(
-        data=data, offset=offset + io_used_bytes
+        data, offset + io_used_bytes
     )
+
     total_used_bytes = io_used_bytes + lo_used_bytes
 
+    # --- BER validity check ---
     if (
         identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and length_form is LengthForm.INDEFINITE
     ):
         raise TokenizerError("Primitive with indefinite length is invalid in BER")
 
+    # --- EOC handling (EARLY RETURN) ---
     if (
         identifier_octet.encoding_class is EncodingClass.UNIVERSAL
         and identifier_octet.tag_number == 0
         and identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and content_length == 0
     ):
-        kind = EncodingKind.EOC
-    else:
-        kind = EncodingKind.TLV
+        encoding = ASN1Encoding(
+            identifier_octet=identifier_octet,
+            length_form=LengthForm.DEFINITE,
+            length=0,
+            content=None,
+            kind=EncodingKind.EOC,
+            meta=ASN1EncodingMeta(
+                offset=offset,
+                length=total_used_bytes,
+            ),
+        )
+        return encoding, total_used_bytes
 
+    # --- Normal TLV ---
+    kind = EncodingKind.TLV
     content = None
+
     if (
         identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and content_length is not None
     ):
-        content = data[
-            offset + total_used_bytes : offset + total_used_bytes + content_length
-        ]
+        content_start = offset + total_used_bytes
+        content_end = content_start + content_length
+        content = data[content_start:content_end]
 
         bit_string = " ".join(f"{x:08b}" for x in content)
         logger.debug(f"content: {bit_string}")
 
-        total_used_bytes += content_length
-
-        if content_length != len(content):
+        if len(content) != content_length:
             raise TokenizerError(
-                f"For {identifier_octet} {content_length=} differs from byte's {len(content)=}"
+                f"For {identifier_octet} {content_length=} differs from {len(content)=}"
             )
+
+        total_used_bytes += content_length
 
     encoding = ASN1Encoding(
         identifier_octet=identifier_octet,
@@ -289,8 +304,8 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         kind=kind,
         meta=ASN1EncodingMeta(offset=offset, length=total_used_bytes),
     )
-    return encoding, total_used_bytes 
 
+    return encoding, total_used_bytes
 
 def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
     logger.debug(f"parsing {len(data)} bytes")
