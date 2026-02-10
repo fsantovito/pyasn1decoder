@@ -160,7 +160,7 @@ def parse_tag_number(data: bytes, offset: int) -> Tuple[int, int]:
     tag_number = first_octect & 0b0001_1111
     match tag_number:
         case n if n < 31:
-            return tag_number, 0
+            return tag_number, 1
 
         case _:
             raise NotImplementedError("tag number with multiple octets")
@@ -192,7 +192,7 @@ def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, i
         encoding_class=encoding_class,
         encoding_type=encoding_type,
         tag_number=tag_number,
-    ), used_bytes + 1
+    ), used_bytes 
 
 
 def parse_length_octect(data: bytes, offset: int) -> Tuple[LengthForm, int | None, int]:
