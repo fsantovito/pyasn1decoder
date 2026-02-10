@@ -289,7 +289,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         kind=kind,
         meta=ASN1EncodingMeta(offset=offset, length=total_used_bytes),
     )
-    return encoding, total_used_bytes + offset
+    return encoding, total_used_bytes 
 
 
 def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
@@ -299,6 +299,7 @@ def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
     offset = 0
     while offset < len(data):
         logger.debug("")
-        encoding, offset = parse_encoding(data=data, offset=offset)
+        encoding, bytes_used = parse_encoding(data=data, offset=offset)
         tlv.append(encoding)
+        offset += bytes_used
     return tlv
