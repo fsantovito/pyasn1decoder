@@ -1,9 +1,12 @@
 from enum import IntEnum
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class TokenizerException(Exception):
+class TokenizerError(ValueError):
     pass
 
 
@@ -35,6 +38,17 @@ class IdentifierOctet:
     encoding_type: EncodingType
     tag_number: int
 
+    def __str__(self) -> str:
+        return (
+            f"{self.encoding_class.name} {self.encoding_type.name} [{self.tag_number}]"
+        )
+
+
+@dataclass()
+class ASN1EncodingMeta:
+    offset: int
+    length: int
+
 
 @dataclass()
 class ASN1Encoding:
@@ -43,6 +57,7 @@ class ASN1Encoding:
     length: int | None
     content: bytes | None
     kind: EncodingKind
+    meta: ASN1EncodingMeta
 
     def __str__(self) -> str:
         encoding_class = self.identifier_octet.encoding_class
@@ -130,89 +145,160 @@ def parse_encoding_type(identifier_octet: int) -> EncodingType:
     return et
 
 
-def parse_tag_number(data: bytes) -> Tuple[int, int]:
-    first_octect = data[0]
+def parse_tag_number(data: bytes, offset: int) -> Tuple[int, int]:
+    """
+    Parses an ASN.1 identifier octet from `data` starting at `offset`.
+
+    Returns:
+        (int, int): the decoded tag number and the number of bytes consumed
+    """
+    logger.debug(f"parsing tag number at offset {offset}")
+
+    first_octect = data[offset]
+    logger.debug(f"first octet {first_octect:08b}")
+
     tag_number = first_octect & 0b0001_1111
-    used_bytes = 1
     match tag_number:
         case n if n < 31:
-            tn = n
+            return tag_number, 0
+
         case _:
-            raise NotImplementedError("ottetti multipli!!")
-    return tn, used_bytes
+            raise NotImplementedError("tag number with multiple octets")
 
 
-def parse_identifier_octet(data: bytes) -> Tuple[IdentifierOctet, bytes]:
-    identifier_octet = data[0]
+def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, int]:
+    """
+    Parses an ASN.1 identifier octet from `data` starting at `offset`.
+
+    Returns:
+        (IdentifierOctet, int): the decoded identifier octet and the number of bytes consumed
+    """
+
+    logger.debug(f"parsing identifier octet at offset {offset}")
+
+    identifier_octet = data[offset]
+    logger.debug(f"identifier octet {identifier_octet:08b}")
+
     encoding_class = parse_encoding_class(identifier_octet=identifier_octet)
+    logger.debug(f"encoding class is {encoding_class.name}")
+
     encoding_type = parse_encoding_type(identifier_octet=identifier_octet)
-    tag_number, used_bytes = parse_tag_number(data=data)
+    logger.debug(f"encoding type is {encoding_type.name}")
+
+    tag_number, used_bytes = parse_tag_number(data=data, offset=offset)
+    logger.debug(f"tag number = '{tag_number}' bytes used = '{used_bytes}'")
 
     return IdentifierOctet(
         encoding_class=encoding_class,
         encoding_type=encoding_type,
         tag_number=tag_number,
-    ), data[used_bytes:]
+    ), used_bytes + 1
 
 
-def parse_length_octect(data: bytes) -> Tuple[LengthForm, int | None, bytes]:
-    byte = data[0]
-    used_bytes = 1
+def parse_length_octect(data: bytes, offset: int) -> Tuple[LengthForm, int | None, int]:
+    """
+    Parses an ASN.1 length octet from `data` starting at `offset`.
+
+    Returns:
+        (LengthForm, int | None, int): the length form, the length of the content of the tag_number
+        and the number of bytes consumed
+    """
+    logger.debug(f"parsing length octet at offset {offset}")
+
+    byte = data[offset]
+    logger.debug(f"length octet is {byte:08b}")
 
     if byte == 0b1000_0000:
-        return LengthForm.INDEFINITE, None, data[used_bytes:]
+        length_form = LengthForm.INDEFINITE
+        content_length = None
+        bytes_used = 1
+        logger.debug(f"{length_form.name=}, {content_length=}, {bytes_used=}")
+        return length_form, content_length, bytes_used
 
     if byte & 0b1000_0000:
-        n_bytes = byte & 0b0111_1111
-        length = int.from_bytes(data[1 : 1 + n_bytes], "big")
-        return LengthForm.DEFINITE, length, data[used_bytes + n_bytes :]
+        bytes_used = (byte & 0b0111_1111) + 1
+        length_form = LengthForm.DEFINITE
+        content_length = int.from_bytes(data[offset + 1 : offset + bytes_used], "big")
+
     else:
-        return LengthForm.DEFINITE, byte, data[used_bytes:]
+        length_form = LengthForm.DEFINITE
+        content_length = byte
+        bytes_used = 1
+
+    logger.debug(f"{length_form.name=}, {content_length=}, {bytes_used=}")
+    return length_form, content_length, bytes_used
 
 
-def parse_encoding(data: bytes) -> Tuple[ASN1Encoding, bytes]:
-    identifier_octet, data = parse_identifier_octet(data)
-    length_form, length, data = parse_length_octect(data)
+def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
+    """
+    Parses an ASN.1 encoding from `data` starting at `offset`.
+
+    Returns:
+        (ASN1Encoding, int): the decoded encoding and the number of bytes consumed
+
+    Raises:
+        TokenizerError: if parsing fails
+    """
+
+    identifier_octet, io_used_bytes = parse_identifier_octet(data=data, offset=offset)
+    length_form, content_length, lo_used_bytes = parse_length_octect(
+        data=data, offset=offset + io_used_bytes
+    )
+    total_used_bytes = io_used_bytes + lo_used_bytes
 
     if (
         identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and length_form is LengthForm.INDEFINITE
     ):
-        raise TokenizerException("Primitive with indefinite length is invalid in BER")
+        raise TokenizerError("Primitive with indefinite length is invalid in BER")
 
     if (
         identifier_octet.encoding_class is EncodingClass.UNIVERSAL
         and identifier_octet.tag_number == 0
         and identifier_octet.encoding_type is EncodingType.PRIMITIVE
-        and length == 0
+        and content_length == 0
     ):
         kind = EncodingKind.EOC
     else:
         kind = EncodingKind.TLV
 
     content = None
-    if identifier_octet.encoding_type is EncodingType.PRIMITIVE and length is not None:
-        content = data[:length]
-        data = data[length:]
+    if (
+        identifier_octet.encoding_type is EncodingType.PRIMITIVE
+        and content_length is not None
+    ):
+        content = data[
+            offset + total_used_bytes : offset + total_used_bytes + content_length
+        ]
 
-        if length != len(content):
-            raise TokenizerException(
-                f"For {identifier_octet} {length=} differs from byte's {len(content)=}"
+        bit_string = " ".join(f"{x:08b}" for x in content)
+        logger.debug(f"content: {bit_string}")
+
+        total_used_bytes += content_length
+
+        if content_length != len(content):
+            raise TokenizerError(
+                f"For {identifier_octet} {content_length=} differs from byte's {len(content)=}"
             )
 
     encoding = ASN1Encoding(
         identifier_octet=identifier_octet,
         length_form=length_form,
-        length=length,
+        length=content_length,
         content=content,
         kind=kind,
+        meta=ASN1EncodingMeta(offset=offset, length=total_used_bytes),
     )
-    return encoding, data
+    return encoding, total_used_bytes + offset
 
 
 def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
+    logger.debug(f"parsing {len(data)} bytes")
+
     tlv = []
-    while data:
-        encoding, data = parse_encoding(data)
+    offset = 0
+    while offset < len(data):
+        logger.debug("")
+        encoding, offset = parse_encoding(data=data, offset=offset)
         tlv.append(encoding)
     return tlv

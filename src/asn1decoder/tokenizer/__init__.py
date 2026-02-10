@@ -5,7 +5,7 @@ from .tokenizer import (
     IdentifierOctet,
     ASN1Encoding,
     ASN1TypeNames,
-    asn1_tlv,TokenizerException,
+    asn1_tlv,TokenizerError,
 )
 
 __all__ = [
@@ -16,5 +16,5 @@ __all__ = [
     "ASN1Encoding",
     "ASN1TypeNames",
     "asn1_tlv",
-    "TokenizerException"
+    "TokenizerError"
 ]

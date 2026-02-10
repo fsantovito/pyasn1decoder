@@ -1,4 +1,13 @@
+import logging
 from asn1decoder.tokenizer import asn1_tlv
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    # format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    format="%(levelname)s %(message)s",
+)
+
 
 def main():
     with open("bdata_ok.der", "rb") as f:
