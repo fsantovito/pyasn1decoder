@@ -47,7 +47,7 @@ class IdentifierOctet:
 @dataclass()
 class ASN1EncodingMeta:
     offset: int
-    length: int
+    header_length: int
 
 
 @dataclass()
@@ -70,7 +70,7 @@ class ASN1Encoding:
             tag_name = f"[{tag_number}]"
 
         if self.kind is EncodingKind.EOC:
-            return f"os={self.meta.offset} tl={self.meta.length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)}".ljust(
+            return f"os={self.meta.offset} hl={self.meta.header_length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)}".ljust(
                 20
             )
 
@@ -81,7 +81,7 @@ class ASN1Encoding:
         if self.length_form is LengthForm.DEFINITE:
             length_form += f"={length}"
 
-        return f"os={self.meta.offset} tl={self.meta.length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)} {length_form} {content}"
+        return f"os={self.meta.offset} hl={self.meta.header_length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)} {length_form} {content}"
 
 
 ASN1TypeNames: Dict[int, str] = {
@@ -119,6 +119,13 @@ ASN1TypeNames: Dict[int, str] = {
 }
 
 
+def _ensure_valid_offset(data: bytes, offset: int):
+    if offset >= len(data):
+        raise TokenizerError(
+            f"Unexpected end of data. Requested {offset=} in {len(data)} bytes"
+        )
+
+
 def parse_encoding_class(identifier_octet: int) -> EncodingClass:
     match identifier_octet & 0b1100_0000:
         case 0b0000_0000:
@@ -154,6 +161,8 @@ def parse_tag_number(data: bytes, offset: int) -> Tuple[int, int]:
     """
     logger.debug(f"parsing tag number at offset {offset}")
 
+    _ensure_valid_offset(data=data, offset=offset)
+
     first_octect = data[offset]
     logger.debug(f"first octet {first_octect:08b}")
 
@@ -176,6 +185,8 @@ def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, i
 
     logger.debug(f"parsing identifier octet at offset {offset}")
 
+    _ensure_valid_offset(data=data, offset=offset)
+
     identifier_octet = data[offset]
     logger.debug(f"identifier octet {identifier_octet:08b}")
 
@@ -192,7 +203,7 @@ def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, i
         encoding_class=encoding_class,
         encoding_type=encoding_type,
         tag_number=tag_number,
-    ), used_bytes 
+    ), used_bytes
 
 
 def parse_length_octet(data: bytes, offset: int) -> Tuple[LengthForm, int | None, int]:
@@ -204,6 +215,8 @@ def parse_length_octet(data: bytes, offset: int) -> Tuple[LengthForm, int | None
         and the number of bytes consumed
     """
     logger.debug(f"parsing length octet at offset {offset}")
+
+    _ensure_valid_offset(data=data, offset=offset)
 
     byte = data[offset]
     logger.debug(f"length octet is {byte:08b}")
@@ -218,7 +231,11 @@ def parse_length_octet(data: bytes, offset: int) -> Tuple[LengthForm, int | None
     if byte & 0b1000_0000:
         bytes_used = (byte & 0b0111_1111) + 1
         length_form = LengthForm.DEFINITE
-        content_length = int.from_bytes(data[offset + 1 : offset + bytes_used], "big")
+        start = offset + 1
+        end = offset + bytes_used
+        _ensure_valid_offset(data=data, offset=start)
+        _ensure_valid_offset(data=data, offset=end - 1)
+        content_length = int.from_bytes(data[start:end], "big")
 
     else:
         length_form = LengthForm.DEFINITE
@@ -237,6 +254,8 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         (ASN1Encoding, int): the decoded encoding and the number of bytes consumed
     """
 
+    _ensure_valid_offset(data=data, offset=offset)
+
     # --- Identifier ---
     identifier_octet, io_used_bytes = parse_identifier_octet(data, offset)
 
@@ -245,7 +264,8 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         data, offset + io_used_bytes
     )
 
-    total_used_bytes = io_used_bytes + lo_used_bytes
+    header_length = io_used_bytes + lo_used_bytes
+    total_used_bytes = header_length
 
     # --- BER validity check ---
     if (
@@ -269,7 +289,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
             kind=EncodingKind.EOC,
             meta=ASN1EncodingMeta(
                 offset=offset,
-                length=total_used_bytes,
+                header_length=header_length,
             ),
         )
         return encoding, total_used_bytes
@@ -277,6 +297,18 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
     # --- Normal TLV ---
     kind = EncodingKind.TLV
     content = None
+
+    if (
+        identifier_octet.encoding_type is EncodingType.CONSTRUCTED
+        and length_form is LengthForm.DEFINITE
+    ):
+        if content_length is None:
+            raise TokenizerError(
+                "CONSTRUCTED types with DEFINITE length form must have a definite content length"
+            )
+
+        if offset + header_length + content_length > len(data):
+            raise TokenizerError("Invalid content length")
 
     if (
         identifier_octet.encoding_type is EncodingType.PRIMITIVE
@@ -302,10 +334,11 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         length=content_length,
         content=content,
         kind=kind,
-        meta=ASN1EncodingMeta(offset=offset, length=total_used_bytes),
+        meta=ASN1EncodingMeta(offset=offset, header_length=header_length),
     )
 
     return encoding, total_used_bytes
+
 
 def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
     logger.debug(f"parsing {len(data)} bytes")
@@ -315,6 +348,10 @@ def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
     while offset < len(data):
         logger.debug("")
         encoding, bytes_used = parse_encoding(data=data, offset=offset)
+        if bytes_used <= 0:
+            raise TokenizerError(
+                f"lexer consumed an invalid amount of bytes: {bytes_used}"
+            )
         tlv.append(encoding)
         offset += bytes_used
     return tlv
