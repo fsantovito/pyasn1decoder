@@ -70,7 +70,7 @@ class ASN1Encoding:
             tag_name = f"[{tag_number}]"
 
         if self.kind is EncodingKind.EOC:
-            return f"{encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)}".ljust(
+            return f"os={self.meta.offset} tl={self.meta.length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)}".ljust(
                 20
             )
 
@@ -81,7 +81,7 @@ class ASN1Encoding:
         if self.length_form is LengthForm.DEFINITE:
             length_form += f"={length}"
 
-        return f"{encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)} {length_form} {content}"
+        return f"os={self.meta.offset} tl={self.meta.length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)} {length_form} {content}"
 
 
 ASN1TypeNames: Dict[int, str] = {
@@ -195,7 +195,7 @@ def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, i
     ), used_bytes 
 
 
-def parse_length_octect(data: bytes, offset: int) -> Tuple[LengthForm, int | None, int]:
+def parse_length_octet(data: bytes, offset: int) -> Tuple[LengthForm, int | None, int]:
     """
     Parses an ASN.1 length octet from `data` starting at `offset`.
 
@@ -241,7 +241,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
     identifier_octet, io_used_bytes = parse_identifier_octet(data, offset)
 
     # --- Length ---
-    length_form, content_length, lo_used_bytes = parse_length_octect(
+    length_form, content_length, lo_used_bytes = parse_length_octet(
         data, offset + io_used_bytes
     )
 
