@@ -10,7 +10,7 @@ class TokenizerError(ValueError):
     pass
 
 
-class EncodingClass(IntEnum):
+class TagClass(IntEnum):
     UNIVERSAL = 0
     APPLICATION = 1
     CONTEXT_SPECIFIC = 2
@@ -34,7 +34,7 @@ class EncodingKind(IntEnum):
 
 @dataclass()
 class IdentifierOctet:
-    tag_class: EncodingClass
+    tag_class: TagClass
     encoding_type: EncodingType
     tag_number: int
 
@@ -64,7 +64,7 @@ class ASN1Encoding:
         encoding_type = self.identifier_octet.encoding_type
         tag_number = self.identifier_octet.tag_number
 
-        if tag_class == EncodingClass.UNIVERSAL:
+        if tag_class == TagClass.UNIVERSAL:
             tag_name = f"{ASN1TypeNames.get(tag_number, '')}[{tag_number}]"
         else:
             tag_name = f"[{tag_number}]"
@@ -126,16 +126,16 @@ def _ensure_valid_offset(data: bytes, offset: int):
         )
 
 
-def parse_encoding_class(identifier_octet: int) -> EncodingClass:
+def parse_encoding_class(identifier_octet: int) -> TagClass:
     match identifier_octet & 0b1100_0000:
         case 0b0000_0000:
-            ec = EncodingClass.UNIVERSAL
+            ec = TagClass.UNIVERSAL
         case 0b0100_0000:
-            ec = EncodingClass.APPLICATION
+            ec = TagClass.APPLICATION
         case 0b1000_0000:
-            ec = EncodingClass.CONTEXT_SPECIFIC
+            ec = TagClass.CONTEXT_SPECIFIC
         case 0b1100_0000:
-            ec = EncodingClass.PRIVATE
+            ec = TagClass.PRIVATE
         case _:
             raise AssertionError("unreachable")
     return ec
@@ -276,7 +276,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
 
     # --- EOC handling (EARLY RETURN) ---
     if (
-        identifier_octet.tag_class is EncodingClass.UNIVERSAL
+        identifier_octet.tag_class is TagClass.UNIVERSAL
         and identifier_octet.tag_number == 0
         and identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and content_length == 0

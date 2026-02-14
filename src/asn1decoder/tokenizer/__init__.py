@@ -1,5 +1,5 @@
 from .tokenizer import (
-    EncodingClass,
+    TagClass,
     EncodingType,
     LengthForm,
     IdentifierOctet,
@@ -10,7 +10,7 @@ from .tokenizer import (
 )
 
 __all__ = [
-    "EncodingClass",
+    "TagClass",
     "EncodingType",
     "LengthForm",
     "IdentifierOctet",
