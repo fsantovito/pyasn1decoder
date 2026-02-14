@@ -10,7 +10,7 @@ logging.basicConfig(
 
 
 def main():
-    with open("bdata_ok.der", "rb") as f:
+    with open("files/bdata_ok.der", "rb") as f:
         data = f.read()
 
     tlv = asn1_tlv(data)
