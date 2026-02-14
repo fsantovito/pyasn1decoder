@@ -34,13 +34,13 @@ class EncodingKind(IntEnum):
 
 @dataclass()
 class IdentifierOctet:
-    encoding_class: EncodingClass
+    tag_class: EncodingClass
     encoding_type: EncodingType
     tag_number: int
 
     def __str__(self) -> str:
         return (
-            f"{self.encoding_class.name} {self.encoding_type.name} [{self.tag_number}]"
+            f"{self.tag_class.name} {self.encoding_type.name} [{self.tag_number}]"
         )
 
 
@@ -60,17 +60,17 @@ class ASN1Encoding:
     meta: ASN1EncodingMeta
 
     def __str__(self) -> str:
-        encoding_class = self.identifier_octet.encoding_class
+        tag_class = self.identifier_octet.tag_class
         encoding_type = self.identifier_octet.encoding_type
         tag_number = self.identifier_octet.tag_number
 
-        if encoding_class == EncodingClass.UNIVERSAL:
+        if tag_class == EncodingClass.UNIVERSAL:
             tag_name = f"{ASN1TypeNames.get(tag_number, '')}[{tag_number}]"
         else:
             tag_name = f"[{tag_number}]"
 
         if self.kind is EncodingKind.EOC:
-            return f"os={self.meta.offset} hl={self.meta.header_length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)}".ljust(
+            return f"os={self.meta.offset} hl={self.meta.header_length} {tag_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)}".ljust(
                 20
             )
 
@@ -81,7 +81,7 @@ class ASN1Encoding:
         if self.length_form is LengthForm.DEFINITE:
             length_form += f"={length}"
 
-        return f"os={self.meta.offset} hl={self.meta.header_length} {encoding_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)} {length_form} {content}"
+        return f"os={self.meta.offset} hl={self.meta.header_length} {tag_class.name.ljust(16)} {encoding_type.name.ljust(11)} {tag_name.ljust(20)} {length_form} {content}"
 
 
 ASN1TypeNames: Dict[int, str] = {
@@ -200,7 +200,7 @@ def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, i
     logger.debug(f"tag number = '{tag_number}' bytes used = '{used_bytes}'")
 
     return IdentifierOctet(
-        encoding_class=encoding_class,
+        tag_class=encoding_class,
         encoding_type=encoding_type,
         tag_number=tag_number,
     ), used_bytes
@@ -276,7 +276,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
 
     # --- EOC handling (EARLY RETURN) ---
     if (
-        identifier_octet.encoding_class is EncodingClass.UNIVERSAL
+        identifier_octet.tag_class is EncodingClass.UNIVERSAL
         and identifier_octet.tag_number == 0
         and identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and content_length == 0

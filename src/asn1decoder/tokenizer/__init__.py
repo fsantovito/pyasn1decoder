@@ -6,6 +6,7 @@ from .tokenizer import (
     ASN1Encoding,
     ASN1TypeNames,
     asn1_tlv,TokenizerError,
+    parse_encoding
 )
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "ASN1Encoding",
     "ASN1TypeNames",
     "asn1_tlv",
-    "TokenizerError"
+    "TokenizerError",
+    "parse_encoding"
 ]
