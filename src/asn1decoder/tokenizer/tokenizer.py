@@ -39,9 +39,7 @@ class IdentifierOctet:
     tag_number: int
 
     def __str__(self) -> str:
-        return (
-            f"{self.tag_class.name} {self.encoding_type.name} [{self.tag_number}]"
-        )
+        return f"{self.tag_class.name} {self.encoding_type.name} [{self.tag_number}]"
 
 
 @dataclass()
@@ -152,6 +150,46 @@ def parse_encoding_type(identifier_octet: int) -> EncodingType:
     return et
 
 
+def parse_high_tag_number(data: bytes, offset: int) -> Tuple[int, int]:
+    """
+    Parse ASN.1 high-tag-number form
+
+    Returns:
+        (tag_number, bytes_consumed)
+    """
+    _ensure_valid_offset(data=data, offset=offset)
+
+    first_octet = data[offset]
+    tag_part = first_octet & 0b0001_1111
+
+    if tag_part != 0b0001_1111:
+        raise LexerError("Not a high-tag-number form (low 5 bits must be 11111)")
+
+    tag_number = 0
+    bytes_used = 1
+
+    while True:
+        offset += 1
+        _ensure_valid_offset(data=data, offset=offset)
+
+        byte = data[offset]
+        bytes_used += 1
+
+        value = byte & 0b0111_1111
+
+        # 8.1.2.4.2 c) first subsequent octet bits 7–1 shall not be all zero
+        if bytes_used == 2 and value == 0:
+            raise LexerError("First subsequent octet cannot have bits 7–1 all zero")
+
+        tag_number = (tag_number << 7) | value
+
+        # 8.1.2.4.2 a) bit 8 of each octet shall be set to one unless it is the last octet of the identifier octets
+        if byte & 0b1000_0000 == 0:
+            break
+
+    return tag_number, bytes_used
+
+
 def parse_tag_number(data: bytes, offset: int) -> Tuple[int, int]:
     """
     Parses an ASN.1 identifier octet from `data` starting at `offset`.
@@ -163,16 +201,17 @@ def parse_tag_number(data: bytes, offset: int) -> Tuple[int, int]:
 
     _ensure_valid_offset(data=data, offset=offset)
 
-    first_octect = data[offset]
-    logger.debug(f"first octet {first_octect:08b}")
+    first_octet = data[offset]
+    logger.debug(f"first octet {first_octet:08b}")
 
-    tag_number = first_octect & 0b0001_1111
-    match tag_number:
-        case n if n < 31:
-            return tag_number, 1
+    tag_number = first_octet & 0b0001_1111
 
-        case _:
-            raise NotImplementedError("tag number with multiple octets")
+    if tag_number <= 30:
+        bytes_used = 1
+    else:
+        tag_number, bytes_used = parse_high_tag_number(data=data, offset=offset)
+
+    return tag_number, bytes_used
 
 
 def parse_identifier_octet(data: bytes, offset: int) -> Tuple[IdentifierOctet, int]:
@@ -349,9 +388,7 @@ def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
         logger.debug("")
         encoding, bytes_used = parse_encoding(data=data, offset=offset)
         if bytes_used <= 0:
-            raise LexerError(
-                f"lexer consumed an invalid amount of bytes: {bytes_used}"
-            )
+            raise LexerError(f"lexer consumed an invalid amount of bytes: {bytes_used}")
         tlv.append(encoding)
         offset += bytes_used
     return tlv
