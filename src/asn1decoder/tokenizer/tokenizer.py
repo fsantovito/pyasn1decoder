@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class TokenizerError(ValueError):
+class LexerError(ValueError):
     pass
 
 
@@ -121,7 +121,7 @@ ASN1TypeNames: Dict[int, str] = {
 
 def _ensure_valid_offset(data: bytes, offset: int):
     if offset >= len(data):
-        raise TokenizerError(
+        raise LexerError(
             f"Unexpected end of data. Requested {offset=} in {len(data)} bytes"
         )
 
@@ -272,7 +272,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         identifier_octet.encoding_type is EncodingType.PRIMITIVE
         and length_form is LengthForm.INDEFINITE
     ):
-        raise TokenizerError("Primitive with indefinite length is invalid in BER")
+        raise LexerError("Primitive with indefinite length is invalid in BER")
 
     # --- EOC handling (EARLY RETURN) ---
     if (
@@ -303,12 +303,12 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         and length_form is LengthForm.DEFINITE
     ):
         if content_length is None:
-            raise TokenizerError(
+            raise LexerError(
                 "CONSTRUCTED types with DEFINITE length form must have a definite content length"
             )
 
         if offset + header_length + content_length > len(data):
-            raise TokenizerError("Invalid content length")
+            raise LexerError("Invalid content length")
 
     if (
         identifier_octet.encoding_type is EncodingType.PRIMITIVE
@@ -322,7 +322,7 @@ def parse_encoding(data: bytes, offset: int) -> Tuple[ASN1Encoding, int]:
         logger.debug(f"content: {bit_string}")
 
         if len(content) != content_length:
-            raise TokenizerError(
+            raise LexerError(
                 f"For {identifier_octet} {content_length=} differs from {len(content)=}"
             )
 
@@ -349,7 +349,7 @@ def asn1_tlv(data: bytes) -> List[ASN1Encoding]:
         logger.debug("")
         encoding, bytes_used = parse_encoding(data=data, offset=offset)
         if bytes_used <= 0:
-            raise TokenizerError(
+            raise LexerError(
                 f"lexer consumed an invalid amount of bytes: {bytes_used}"
             )
         tlv.append(encoding)
