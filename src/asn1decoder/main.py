@@ -1,5 +1,5 @@
 import logging
-from asn1decoder.tokenizer import asn1_tlv
+from asn1decoder.tokenizer import parse_bytes, print_encoding
 
 
 logging.basicConfig(
@@ -13,10 +13,9 @@ def main():
     with open("files/bdata_ok.der", "rb") as f:
         data = f.read()
 
-    tlv = asn1_tlv(data)
+    encoding = parse_bytes(data=memoryview(data))
 
-    for encoding in tlv:
-        print(encoding)
+    print_encoding(encoding)
 
 
 if __name__ == "__main__":
