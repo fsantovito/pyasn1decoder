@@ -7,6 +7,9 @@ from asn1decoder.asn1types import (
     TagClass,
 )
 from asn1decoder.asn1parser import (
+    EOCError,
+    LengthError,
+    TagNumberError,
     parse_encoding,
     parse_identifier_component,
     parse_length_component,
@@ -86,7 +89,7 @@ def test_8_1_2_4_2():
     assert identifier_component.header.length == len(data)
 
     # c)bits 7 to 1 of the first subsequent octet shall not all be zero.
-    with pytest.raises(ASN1ParserError):
+    with pytest.raises(TagNumberError):
         data: memoryview = memoryview(bytes([0b11_1_11111, 0b1_0000000]))
         parse_identifier_component(data=data, offset=0)
 
@@ -188,7 +191,7 @@ def test_8_1_3_2():
     assert encoding.header.length == len(data)
 
     # a)use the definite form (see 8.1.3.3) if the encoding is primitive;
-    with pytest.raises(ASN1ParserError):
+    with pytest.raises(LengthError):
         data: memoryview = memoryview(bytes([0b00_0_11110, 0b1000_0000]))
         parse_encoding(data=data, offset=0)
 
@@ -310,7 +313,7 @@ def test_8_1_3_5():
         )
     )
 
-    with pytest.raises(ASN1ParserError):
+    with pytest.raises(LengthError):
         parse_encoding(data=data, offset=0)
 
 
@@ -407,5 +410,5 @@ def test_8_1_5():
         )
     )
 
-    with pytest.raises(ASN1ParserError):
+    with pytest.raises(EOCError):
         parse_encoding(data=data, offset=0)
