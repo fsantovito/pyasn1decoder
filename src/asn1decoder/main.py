@@ -1,5 +1,5 @@
 import logging
-from asn1decoder.tokenizer import parse_bytes, print_encoding
+from asn1decoder.asn1parser import parse_encoding, print_encoding
 
 
 logging.basicConfig(
@@ -13,7 +13,7 @@ def main():
     with open("files/bdata_ok.der", "rb") as f:
         data = f.read()
 
-    encoding = parse_bytes(data=memoryview(data))
+    encoding = parse_encoding(data=memoryview(data))
 
     print_encoding(encoding)
 

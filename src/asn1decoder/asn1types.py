@@ -78,6 +78,36 @@ class ASN1Encoding:
             length_form = self.length_component.form.name
         return f"{class_name} {type_name} {tag_name} {length_form} {content}"
 
+    @property
+    def tag_class(self) -> TagClass:
+        return self.identifier_component.tag_class
+
+    @property
+    def encoding_type(self) -> EncodingType:
+        return self.identifier_component.encoding_type
+
+    @property
+    def tag_number(self) -> int:
+        return self.identifier_component.tag_number
+
+    @property
+    def length_form(self) -> LengthForm:
+        return self.length_component.form
+
+    @property
+    def content_length(self) -> int | None:
+        return self.length_component.content_length
+
+    @property
+    def content(self) -> bytes:
+        if self.encoding_type is EncodingType.CONSTRUCTED:
+            raise TypeError("CONSTRUCTED encodings don't have content")
+
+        if isinstance(self.content_component.content, memoryview):
+            return self.content_component.content.tobytes()
+        else:
+            raise AssertionError("PRIMITIVE encodings without content")
+
 
 ASN1TypeNames: Dict[int, str] = {
     0: "EOC",

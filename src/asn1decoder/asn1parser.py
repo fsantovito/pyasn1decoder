@@ -12,23 +12,35 @@ from asn1decoder.asn1types import (
 )
 
 
-class TokenizerError(ValueError):
+class ASN1ParserError(ValueError):
+    pass
+
+
+class TagNumberError(ASN1ParserError):
+    pass
+
+
+class LengthError(ASN1ParserError):
+    pass
+
+
+class EOCError(ASN1ParserError):
     pass
 
 
 def _ensure_valid_offset(data: memoryview, offset: int, length: int | None = None):
     if offset >= len(data):
-        raise TokenizerError(
+        raise ASN1ParserError(
             f"Unexpected end of data. Requested {offset=} in {len(data)} bytes"
         )
 
     if length is not None and offset + length > len(data):
-        raise TokenizerError(
+        raise ASN1ParserError(
             f"Unexpected end of data. Requested {length} bytes from offset {offset} in {len(data)} bytes"
         )
 
 
-def parse_encoding_class(identifier_octet: int) -> TagClass:
+def parse_tag_class(identifier_octet: int) -> TagClass:
     match identifier_octet & 0b1100_0000:
         case 0b0000_0000:
             ec = TagClass.UNIVERSAL
@@ -67,7 +79,7 @@ def parse_high_tag_number(data: memoryview, offset: int) -> Tuple[int, int]:
     tag_part = first_octet & 0b0001_1111
 
     if tag_part != 0b0001_1111:
-        raise TokenizerError("Not a high-tag-number form (low 5 bits must be 11111)")
+        raise TagNumberError("Not a high-tag-number form (low 5 bits must be 11111)")
 
     tag_number = 0
     bytes_used = 1
@@ -83,7 +95,7 @@ def parse_high_tag_number(data: memoryview, offset: int) -> Tuple[int, int]:
 
         # 8.1.2.4.2 c) first subsequent octet bits 7–1 shall not be all zero
         if bytes_used == 2 and value == 0:
-            raise TokenizerError("First subsequent octet cannot have bits 7–1 all zero")
+            raise TagNumberError("First subsequent octet cannot have bits 7–1 all zero")
 
         tag_number = (tag_number << 7) | value
 
@@ -126,7 +138,7 @@ def parse_identifier_component(data: memoryview, offset: int) -> IdentifierCompo
     _ensure_valid_offset(data=data, offset=offset)
 
     identifier_octet = data[offset]
-    encoding_class = parse_encoding_class(identifier_octet=identifier_octet)
+    encoding_class = parse_tag_class(identifier_octet=identifier_octet)
     encoding_type = parse_encoding_type(identifier_octet=identifier_octet)
     tag_number, used_bytes = parse_tag_number(data=data, offset=offset)
 
@@ -159,7 +171,7 @@ def parse_length_component(data: memoryview, offset: int) -> LengthComponent:
 
     if byte & 0b1000_0000:
         if byte == 0b1111_1111:
-            raise TokenizerError(
+            raise LengthError(
                 "first byte of the long form of the length octet cannot be 0xFF"
             )
 
@@ -190,12 +202,12 @@ def parse_eoc_octet(data: memoryview, offset: int) -> EOCComponent:
     second_byte = data[offset + 1]
 
     if first_byte != 0 or second_byte != 0:
-        raise TokenizerError(f"invalid EOC at offset {offset}")
+        raise EOCError(f"invalid EOC at offset {offset}")
 
     return EOCComponent(header=Header(offset=offset, length=2))
 
 
-def parse_primitive_content(
+def parse_primitive_value(
     data: memoryview, offset: int, length: int
 ) -> ContentComponent:
     _ensure_valid_offset(data=data, offset=offset)
@@ -206,7 +218,7 @@ def parse_primitive_content(
     )
 
 
-def parse_bytes(data: memoryview, offset: int = 0) -> ASN1Encoding:
+def parse_encoding(data: memoryview, offset: int = 0) -> ASN1Encoding:
     """
     Parses an ASN.1 encoding from `data` starting at `offset`.
 
@@ -227,16 +239,16 @@ def parse_bytes(data: memoryview, offset: int = 0) -> ASN1Encoding:
         identifier_component.encoding_type is EncodingType.PRIMITIVE
         and length_component.form is LengthForm.INDEFINITE
     ):
-        raise TokenizerError("Primitive with indefinite length is invalid in BER")
+        raise LengthError("Primitive with indefinite length is invalid in BER")
 
     if identifier_component.encoding_type is EncodingType.PRIMITIVE:
         if (
             length_component.form is LengthForm.INDEFINITE
             or length_component.content_length is None
         ):
-            raise TokenizerError("Primitive with indefinite length is invalid in BER")
+            raise LengthError("Primitive with indefinite length is invalid in BER")
 
-        content_component = parse_primitive_content(
+        content_component = parse_primitive_value(
             data=data,
             offset=current_offset,
             length=length_component.content_length,
@@ -257,14 +269,18 @@ def parse_bytes(data: memoryview, offset: int = 0) -> ASN1Encoding:
             children: List[ASN1Encoding] = []
 
             while True:
-                _ensure_valid_offset(data=data, offset=current_offset, length=2)
+                try:
+                    _ensure_valid_offset(data=data, offset=current_offset, length=2)
+                except ASN1ParserError:
+                    raise EOCError("missing required EOC")
+
                 # check EOC
                 if data[current_offset] == 0 and data[current_offset + 1] == 0:
                     eoc = parse_eoc_octet(data, current_offset)
                     current_offset += eoc.header.length
                     break
 
-                child = parse_bytes(data, current_offset)
+                child = parse_encoding(data, current_offset)
                 children.append(child)
                 current_offset += child.header.length
 
@@ -286,22 +302,19 @@ def parse_bytes(data: memoryview, offset: int = 0) -> ASN1Encoding:
 
         else:  # LengthForm.DEFINITE
             if length_component.content_length is None:
-                raise TokenizerError("DEFINITE without content_length")
+                raise LengthError("DEFINITE without content_length")
 
             end_offset = current_offset + length_component.content_length
-            _ensure_valid_offset(
-                data=data, offset=current_offset, length=length_component.content_length
-            )
 
             children: List[ASN1Encoding] = []
 
             while current_offset < end_offset:
-                child = parse_bytes(data=data, offset=current_offset)
+                child = parse_encoding(data=data, offset=current_offset)
                 children.append(child)
                 current_offset += child.header.length
 
             if current_offset != end_offset:
-                raise TokenizerError("Constructed content length mismatch")
+                raise LengthError("Constructed content length mismatch")
 
             content_component = ContentComponent(
                 content=children,
