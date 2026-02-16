@@ -335,8 +335,3 @@ def parse_encoding(data: memoryview, offset: int = 0) -> ASN1Encoding:
             )
 
 
-def print_encoding(encoding: ASN1Encoding, level: int = 0):
-    print(f"{' ' * level}{encoding}")
-    if isinstance(encoding.content_component.content, list):
-        for child in encoding.content_component.content:
-            print_encoding(encoding=child, level=level + 1)
