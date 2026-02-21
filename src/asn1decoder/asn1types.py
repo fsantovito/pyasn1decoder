@@ -103,12 +103,11 @@ class ASN1Encoding:
 
     @property
     def content(self) -> bytes | None:
-        if self.encoding_type is EncodingType.CONSTRUCTED:
-            raise TypeError("CONSTRUCTED encodings don't have content")
-
         if self.content_component is not None:
             if isinstance(self.content_component.content, memoryview):
                 return self.content_component.content.tobytes()
+        else:
+            return None
 
 
 ASN1TypeNames: Dict[int, str] = {
