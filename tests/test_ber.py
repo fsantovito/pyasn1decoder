@@ -13,7 +13,6 @@ from asn1decoder.asn1parser import (
     parse_encoding,
     parse_identifier_component,
     parse_length_component,
-    ASN1ParserError,
 )
 
 
