@@ -2,9 +2,9 @@ from typing import List
 from asn1decoder.asn1types import ASN1Encoding, EncodingType
 from asn1decoder.asn1parser import ASN1ParserError
 
+
 class OIDParserError(ASN1ParserError):
     pass
-
 
 
 def parse_oid_subidentifier(data: List[bytes]) -> int:
@@ -42,6 +42,9 @@ def parse_oid(encoding: ASN1Encoding) -> str:
         )
 
     if encoding.content_length in (None, 0):
+        raise OIDParserError("OID declared without content.")
+
+    if encoding.content is None:
         raise OIDParserError("OID declared without content.")
 
     if encoding.content_length != len(encoding.content):

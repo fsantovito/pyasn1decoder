@@ -57,7 +57,7 @@ class ASN1Encoding:
     header: Header
     identifier_component: IdentifierComponent
     length_component: LengthComponent
-    content_component: ContentComponent
+    content_component: ContentComponent | None
     eoc_component: EOCComponent | None
 
     def __str__(self) -> str:
@@ -72,7 +72,10 @@ class ASN1Encoding:
 
         if self.identifier_component.encoding_type is EncodingType.PRIMITIVE:
             length_form = ""
-            content = self.content_component.content.tobytes() or ""
+            if self.content_component is None:
+                content = ""
+            else:
+                content = self.content_component.content.tobytes() or ""
         else:
             content = ""
             length_form = self.length_component.form.name
@@ -99,14 +102,13 @@ class ASN1Encoding:
         return self.length_component.content_length
 
     @property
-    def content(self) -> bytes:
+    def content(self) -> bytes | None:
         if self.encoding_type is EncodingType.CONSTRUCTED:
             raise TypeError("CONSTRUCTED encodings don't have content")
 
-        if isinstance(self.content_component.content, memoryview):
-            return self.content_component.content.tobytes()
-        else:
-            raise AssertionError("PRIMITIVE encodings without content")
+        if self.content_component is not None:
+            if isinstance(self.content_component.content, memoryview):
+                return self.content_component.content.tobytes()
 
 
 ASN1TypeNames: Dict[int, str] = {

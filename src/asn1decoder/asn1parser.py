@@ -248,6 +248,16 @@ def parse_encoding(data: memoryview, offset: int = 0) -> ASN1Encoding:
         ):
             raise LengthError("Primitive with indefinite length is invalid in BER")
 
+        # null values have 0 content_length and no content
+        if length_component.content_length == 0:
+            return ASN1Encoding(
+                identifier_component=identifier_component,
+                length_component=length_component,
+                content_component=None,
+                eoc_component=None,
+                header=Header(offset=offset, length=current_offset - offset),
+            )
+
         content_component = parse_primitive_value(
             data=data,
             offset=current_offset,
@@ -333,5 +343,3 @@ def parse_encoding(data: memoryview, offset: int = 0) -> ASN1Encoding:
                 eoc_component=None,
                 header=Header(offset=offset, length=current_offset - offset),
             )
-
-

@@ -18,6 +18,9 @@ def parse_integer(encoding: ASN1Encoding) -> int:
     if encoding.content_length in (None, 0):
         raise IntegerParserError("Integer declared without content.")
 
+    if encoding.content is None:
+        raise IntegerParserError("Integer declared without content.")
+
     if encoding.content_length != len(encoding.content):
         raise IntegerParserError(
             f"Integer length mismatch. Declared {encoding.content_length} found {len(encoding.content)}."
