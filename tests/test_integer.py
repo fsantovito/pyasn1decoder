@@ -1,6 +1,6 @@
 import pytest
 from asn1decoder.asn1parser import parse_encoding
-from asn1decoder.asn1values.integer import parse_integer, IntegerParserError
+from asn1decoder.asn1values import parse_integer, IntegerParserError
 
 
 def test_integer_zero():
