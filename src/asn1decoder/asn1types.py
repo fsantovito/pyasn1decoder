@@ -72,10 +72,8 @@ class ASN1Encoding:
 
         if self.identifier_component.encoding_type is EncodingType.PRIMITIVE:
             length_form = ""
-            if self.content_component is None:
-                content = ""
-            else:
-                content = self.content_component.content.tobytes() or ""
+            content = self.content or ""
+
         else:
             content = ""
             length_form = self.length_component.form.name
@@ -106,8 +104,12 @@ class ASN1Encoding:
         if self.content_component is not None:
             if isinstance(self.content_component.content, memoryview):
                 return self.content_component.content.tobytes()
-        else:
-            return None
+
+    @property
+    def inner_encodings(self) -> List["ASN1Encoding"] | None:
+        if self.content_component is not None:
+            if isinstance(self.content_component.content, list):
+                return self.content_component.content
 
 
 ASN1TypeNames: Dict[int, str] = {
