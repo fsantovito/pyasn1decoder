@@ -28,6 +28,20 @@ class EOCError(ASN1ParserError):
     pass
 
 
+def decode_byte(value: int, encoding="ascii") -> str:
+    if not 0 <= value <= 255:
+        raise ValueError(f"invalid byte '{value.to_bytes().hex()}'")
+
+    try:
+        char = value.to_bytes().decode(encoding=encoding)
+    except UnicodeDecodeError:
+        raise ValueError(
+            f"cannot decode byte '{value.to_bytes().hex()}' to encoding {encoding}"
+        )
+
+    return char
+
+
 def _ensure_valid_offset(data: memoryview, offset: int, length: int | None = None):
     if offset >= len(data):
         raise ASN1ParserError(

@@ -1,26 +1,12 @@
 import string
 from typing import List
 from asn1decoder.asn1types import ASN1Encoding, EncodingType
-from asn1decoder.asn1parser import ASN1ParserError
+from asn1decoder.asn1parser import ASN1ParserError, decode_byte
 from asn1decoder.asn1values.octet_string import parse_octetstring
 
 
 class NumericStringParserError(ASN1ParserError):
     pass
-
-
-def decode_byte(value: int) -> str:
-    if not 0 <= value <= 255:
-        raise ValueError(f"invalid byte '{value.to_bytes().hex()}'")
-
-    try:
-        char = value.to_bytes().decode("ascii")
-    except UnicodeDecodeError:
-        raise ValueError(
-            f"byte '{value.to_bytes().hex()}' is not valid for a NumericString"
-        )
-
-    return char
 
 
 def is_valid_char(char: str) -> bool:
