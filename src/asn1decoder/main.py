@@ -14,10 +14,9 @@ logging.basicConfig(
 
 def dump_encoding(encoding: ASN1Encoding, level: int = 0):
     print(f"{' ' * level}{encoding}")
-    if encoding.content_component is not None:
-        if isinstance(encoding.content_component.content, list):
-            for child in encoding.content_component.content:
-                dump_encoding(encoding=child, level=level + 1)
+
+    for inner_encoding in encoding.inner_encodings or []:
+        dump_encoding(encoding=inner_encoding, level=level + 1)
 
 
 @app.command()
