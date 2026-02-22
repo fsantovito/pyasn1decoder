@@ -9,21 +9,25 @@ class NumericStringParserError(ASN1ParserError):
     pass
 
 
-VALID_CHARS = string.digits + " "
-
-
 def decode_byte(value: int) -> str:
     if not 0 <= value <= 255:
         raise ValueError(f"invalid byte '{value.to_bytes().hex()}'")
+
     try:
         char = value.to_bytes().decode("ascii")
     except UnicodeDecodeError:
         raise ValueError(
             f"byte '{value.to_bytes().hex()}' is not valid for a NumericString"
         )
-    if char not in VALID_CHARS:
-        raise ValueError(f"char '{char}' is not valid for a NumericString")
+
     return char
+
+
+def is_valid_char(char: str) -> bool:
+    if len(char) > 1:
+        raise ValueError(f"expected a character but got a string: '{char}'")
+
+    return char in string.digits + " "
 
 
 def parse_primitive_numericstring(encoding: ASN1Encoding) -> str:
@@ -36,10 +40,19 @@ def parse_primitive_numericstring(encoding: ASN1Encoding) -> str:
     if encoding.content is None:
         return ""
 
-    try:
-        chars = [decode_byte(byte) for byte in encoding.content]
-    except ValueError as e:
-        raise NumericStringParserError(str(e))
+    chars = []
+    for byte in encoding.content:
+        try:
+            char = decode_byte(byte)
+        except ValueError as e:
+            raise NumericStringParserError(str(e))
+
+        if not is_valid_char(char):
+            raise NumericStringParserError(
+                f"char '{char}' is not valid for a NumericString"
+            )
+
+        chars.append(char)
 
     return "".join(chars)
 
