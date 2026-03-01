@@ -24,6 +24,11 @@ from asn1decoder.asn1values.general_string import (
     GeneralStringParserError,
 )
 
+from asn1decoder.asn1values.utf8_string import (
+    parse_utf8string,
+    UTF8StringParserError,
+)
+
 __all__ = [
     "parse_oid",
     "OIDParserError",
@@ -43,4 +48,6 @@ __all__ = [
     "VisibleStringParserError",
     "parse_generalstring",
     "GeneralStringParserError",
+    "parse_utf8string",
+    "UTF8StringParserError",
 ]
