@@ -29,6 +29,8 @@ from asn1decoder.asn1values.utf8_string import (
     UTF8StringParserError,
 )
 
+from asn1decoder.asn1values.utctime import parse_utctime, UTCTimeParserError
+
 __all__ = [
     "parse_oid",
     "OIDParserError",
@@ -50,4 +52,6 @@ __all__ = [
     "GeneralStringParserError",
     "parse_utf8string",
     "UTF8StringParserError",
+    "parse_utctime",
+    "UTCTimeParserError",
 ]
