@@ -15,6 +15,14 @@ from asn1decoder.asn1values.printable_string import (
 )
 
 from asn1decoder.asn1values.ia5_string import parse_ia5string, IA5StringParserError
+from asn1decoder.asn1values.visible_string import (
+    parse_visiblestring,
+    VisibleStringParserError,
+)
+from asn1decoder.asn1values.general_string import (
+    parse_generalstring,
+    GeneralStringParserError,
+)
 
 __all__ = [
     "parse_oid",
@@ -31,4 +39,8 @@ __all__ = [
     "OctetStringParserError",
     "parse_ia5string",
     "IA5StringParserError",
+    "parse_visiblestring",
+    "VisibleStringParserError",
+    "parse_generalstring",
+    "GeneralStringParserError",
 ]
